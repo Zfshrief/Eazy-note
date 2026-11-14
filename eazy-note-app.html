@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Eazy Note</title>
+<style>
+:root{--bg:#f6f7fb;--card:#fff;--tx:#1b1f2a;--mu:#6b7385;--ac:#2563eb;--bd:#e3e6ee;--rd:#e5484d;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#10131a;--card:#1a1f2b;--tx:#eef1f7;--mu:#97a0b5;--ac:#5b8def;--bd:#2a3142}}
+:root[data-theme="dark"]{--bg:#10131a;--card:#1a1f2b;--tx:#eef1f7;--mu:#97a0b5;--ac:#5b8def;--bd:#2a3142}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--tx);font-family:system-ui,-apple-system,"Segoe UI",Tahoma,sans-serif;font-size:16px;min-height:100vh}
+#app{max-width:640px;margin:0 auto;padding:12px 14px 140px}
+header{display:flex;align-items:center;gap:8px;justify-content:space-between;margin-bottom:10px}
+h1{font-size:22px;margin:0}
+button,select,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+.ic{background:var(--card);border:1px solid var(--bd);border-radius:10px;width:40px;height:40px;font-size:18px}
+.sm{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:8px 12px}
+.del{color:var(--rd)}
+input[type=text],input[type=search],input[type=password],select,textarea{width:100%;background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:10px 12px}
+.ti{font-size:18px;font-weight:600}
+.chips{display:flex;gap:6px;overflow-x:auto;padding:8px 0}
+.chip{white-space:nowrap;background:var(--card);border:1px solid var(--bd);border-radius:20px;padding:6px 14px}
+.chip.on{background:var(--ac);color:#fff;border-color:var(--ac)}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:12px;margin-bottom:8px}
+.card b{display:block;margin-bottom:4px}
+.card small,.it small{color:var(--mu)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}
+.row label{display:flex;gap:6px;align-items:center}
+.it{display:flex;gap:8px;align-items:flex-start;background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:10px;margin-bottom:6px}
+.it .bd{flex:1;min-width:0}
+.tx{outline:none;min-height:1.4em;white-space:pre-wrap;word-break:break-word}
+.it button{background:none;border:none;color:var(--mu);font-size:16px}
+#live{color:var(--mu);font-style:italic;min-height:1.4em;padding:4px 2px}
+#mic{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));width:76px;height:76px;border-radius:50%;border:none;background:var(--ac);color:#fff;font-size:32px;box-shadow:0 6px 18px rgba(0,0,0,.3)}
+#mic.rec{background:var(--rd);animation:p 1.2s infinite}
+@keyframes p{50%{box-shadow:0 0 0 14px rgba(229,72,77,.2)}}
+#fab{position:fixed;left:18px;bottom:calc(20px + env(safe-area-inset-bottom,0px));width:60px;height:60px;border-radius:50%;border:none;background:var(--ac);color:#fff;font-size:30px;box-shadow:0 6px 18px rgba(0,0,0,.3)}
+.empty{text-align:center;color:var(--mu);padding:40px 0}
+.hint{color:var(--mu);font-size:13px;line-height:1.6}
+#toast{display:none;position:fixed;top:calc(12px + env(safe-area-inset-top,0px));left:12px;right:12px;background:var(--tx);color:var(--bg);padding:12px 14px;border-radius:12px;z-index:50;line-height:1.5}
+</style>
+</head>
+<body>
+<div id="app"></div><div id="toast"></div>
+<script>
+const app=document.getElementById('app');
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.style.display='block';clearTimeout(window._t);window._t=setTimeout(()=>t.style.display='none',6000)}
+window.alert=toast;
+let S={notes:[],theme:null,pin:'',lang:'ar-EG'},cur=null,rec=null,on=false,filter='الكل',q='';
+const cats=['عام','شغل','زيارات','شخصي'];
+try{S=Object.assign(S,JSON.parse(localStorage.getItem('eazy')||'{}'))}catch(e){}
+function save(){try{localStorage.setItem('eazy',JSON.stringify(S))}catch(e){}}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function fmt(d){return new Date(d).toLocaleString('ar-EG',{weekday:'long',day:'numeric',month:'long',year:'numeric',hour:'numeric',minute:'2-digit'})}
+function applyTheme(){if(S.theme)document.documentElement.setAttribute('data-theme',S.theme);else document.documentElement.removeAttribute('data-theme')}
+function theme(){const d=document.documentElement.getAttribute('data-theme')==='dark'||(!S.theme&&matchMedia('(prefers-color-scheme:dark)').matches);S.theme=d?'light':'dark';applyTheme();save()}
+
+function lock(){
+ app.innerHTML='<div class="empty"><h1>Eazy Note</h1><p>اكتب الكود السري</p><input type="password" id="pn" inputmode="numeric" style="max-width:220px;text-align:center"><p><button class="sm" onclick="unlock()">دخول</button></p></div>'
+}
+function unlock(){if(document.getElementById('pn').value===S.pin)list();else{document.getElementById('pn').value='';document.getElementById('pn').placeholder='الكود غلط'}}
+
+function list(){
+ stop();cur=null;
+ app.innerHTML='<header><h1>🎙️ Eazy Note</h1><span><button class="ic" onclick="theme()">◐</button> <button class="ic" onclick="sett()">⚙</button></span></header>'+
+ '<input type="search" placeholder="ابحث في النوتس" value="'+esc(q)+'" oninput="q=this.value;lst()">'+
+ '<div class="chips" id="ch"></div><div id="res"></div><button id="fab" onclick="newNote()">+</button>';
+ chips();lst();
+}
+function chips(){document.getElementById('ch').innerHTML=['الكل'].concat(cats).map(c=>'<button class="chip'+(c===filter?' on':'')+'" onclick="filter=\''+c+'\';chips();lst()">'+c+'</button>').join('')}
+function lst(){
+ const ns=S.notes.filter(n=>(filter==='الكل'||n.cat===filter)&&(!q||(n.title+' '+n.items.map(i=>i.t).join(' ')).includes(q))).sort((a,b)=>(b.pin?1:0)-(a.pin?1:0)||b.upd-a.upd);
+ document.getElementById('res').innerHTML=ns.length?ns.map(n=>'<div class="card" onclick="openN('+n.id+')"><b>'+(n.pin?'📌 ':'')+esc(n.title||'بدون عنوان')+'</b><div>'+esc((n.items.find(i=>i.t)||{t:''}).t.slice(0,90))+'</div><small>'+esc(n.cat)+' · '+fmt(n.upd)+'</small></div>').join(''):'<div class="empty">مفيش نوتس لسه. دوس + عشان تبدأ</div>';
+}
+function newNote(){const n={id:Date.now(),title:'',cat:'عام',pin:false,ts:true,items:[],upd:Date.now()};S.notes.push(n);save();openN(n.id)}
+function openN(id){cur=S.notes.find(n=>n.id===id);editor()}
+function upd(k,v){cur[k]=v;cur.upd=Date.now();save()}
+
+function editor(){
+ const n=cur;
+ app.innerHTML='<header><button class="ic" onclick="list()">→</button><input type="text" class="ti" placeholder="عنوان النوت" value="'+esc(n.title)+'" oninput="upd(\'title\',this.value)"></header>'+
+ '<div class="row"><select style="width:auto" onchange="upd(\'cat\',this.value)">'+cats.map(c=>'<option'+(c===n.cat?' selected':'')+'>'+c+'</option>').join('')+'</select>'+
+ '<label><input type="checkbox" '+(n.ts?'checked':'')+' onchange="upd(\'ts\',this.checked);items()"> اليوم والتاريخ والساعة</label>'+
+ '<label><input type="checkbox" '+(n.pin?'checked':'')+' onchange="upd(\'pin\',this.checked)"> تثبيت</label></div>'+
+ '<div class="row"><button class="sm" onclick="share()">مشاركة</button><button class="sm" onclick="copyN()">نسخ</button><button class="sm del" onclick="delN()">حذف النوت</button></div>'+
+ '<div id="its"></div><div id="live"></div><div class="row"><input type="text" id="mt" style="flex:1" placeholder="اكتب هنا، أو دوس ميكروفون الكيبورد وإملي"><button class="sm" onclick="addManual()">إضافة</button></div>'+
+ '<p class="hint">أوامر صوتية: قول «نقطة» أو «فاصلة» أو «علامة استفهام» لوحدها، «سطر جديد» لسطر فاضي، «امسح آخر جملة» للحذف. اضغط على أي جملة عشان تعدلها.</p>'+
+ '<button id="mic" onclick="toggle()">🎙</button>';
+ items();
+}
+function items(){
+ document.getElementById('its').innerHTML=cur.items.map((it,i)=>'<div class="it"><div class="bd"><div class="tx" dir="auto" contenteditable="true" onblur="edit('+i+',this.innerText)">'+esc(it.t)+'</div>'+(cur.ts?'<small>'+fmt(it.d)+'</small>':'')+'</div><button onclick="rm('+i+')">✕</button></div>').join('');
+}
+function edit(i,t){if(cur.items[i]&&cur.items[i].t!==t.trim()){cur.items[i].t=t.trim();upd('upd',Date.now())}}
+function rm(i){cur.items.splice(i,1);upd('upd',Date.now());items()}
+function addItem(t){cur.items.push({t:t,d:Date.now()});upd('upd',Date.now());items();window.scrollTo(0,document.body.scrollHeight)}
+let dq=0;
+function delN(){if(Date.now()-dq<3000){S.notes=S.notes.filter(n=>n!==cur);save();list()}else{dq=Date.now();toast('دوس حذف النوت تاني خلال ٣ ثواني للتأكيد')}}
+function txt(){return (cur.title||'بدون عنوان')+'\n\n'+cur.items.map(i=>(cur.ts?'['+fmt(i.d)+'] ':'')+i.t).join('\n')}
+function share(){const t=txt();if(navigator.share)navigator.share({title:cur.title,text:t}).catch(()=>{});else copyN()}
+function copyN(){try{navigator.clipboard.writeText(txt()).then(()=>alert('تم النسخ'))}catch(e){alert('النسخ مش متاح هنا')}}
+
+function addManual(){const m=document.getElementById('mt');if(m.value.trim()){addItem(m.value.trim());m.value=''}}
+window.onNative=function(t,s){if(t==='partial')setLive(s);else if(t==='final'){setLive('');fin(s)}else if(t==='end'){on=false;ui();setLive('')}else if(t==='error'){on=false;ui();toast(s==='not-allowed'?'اسمح للميكروفون من إعدادات التطبيق':s==='unavailable'?'خدمة التعرف على الصوت مش موجودة على الجهاز':'مشكلة في الإملاء ('+s+')')}};
+function toggle(){on?stop():start()}
+function start(){
+ if(window.Android){on=true;Android.start(S.lang||'ar-EG');ui();setLive('بسمعك… اتكلم');return}
+ const R=window.SpeechRecognition||window.webkitSpeechRecognition;
+ if(!R){toast('الإملاء المدمج مش متاح في المتصفح ده. افتح الرابط في كروم، أو استخدم خانة الكتابة تحت مع ميكروفون الكيبورد.');return}
+ rec=new R();rec.lang=S.lang||'ar-EG';rec.continuous=true;rec.interimResults=true;
+ rec.onresult=e=>{let it='';for(let i=e.resultIndex;i<e.results.length;i++){const r=e.results[i];if(r.isFinal)fin(r[0].transcript);else it+=r[0].transcript}setLive(it)};
+ rec.onend=()=>{if(on){try{rec.start()}catch(e){}}else ui()};
+ rec.onerror=e=>{if(e.error==='no-speech'||e.error==='aborted')return;if(e.error==='not-allowed'||e.error==='service-not-allowed'){on=false;ui()}toast('الميكروفون مش شغال هنا ('+e.error+'). افتح الرابط في كروم، أو استخدم خانة الكتابة تحت.')};
+ on=true;try{rec.start()}catch(e){toast('مقدرش أبدأ التسجيل: '+e.message)}ui();setLive('بسمعك… اتكلم');
+}
+function stop(){on=false;if(window.Android){try{Android.stop()}catch(e){}}if(rec){try{rec.stop()}catch(e){}}ui();setLive('')}
+function ui(){const m=document.getElementById('mic');if(m)m.className=on?'rec':''}
+function setLive(t){const l=document.getElementById('live');if(l)l.textContent=t}
+function fin(t){
+ t=t.trim();if(!t||!cur)return;setLive('');
+ const sym={'نقطة':'.','فاصلة':'،','علامة استفهام':'؟'};
+ if(sym[t]){const l=cur.items[cur.items.length-1];if(l){l.t+=sym[t];upd('upd',Date.now());items()}return}
+ if(t==='سطر جديد'){addItem('');return}
+ if(t==='امسح آخر جملة'){cur.items.pop();upd('upd',Date.now());items();return}
+ addItem(t);
+}
+
+function sett(){
+ stop();
+ app.innerHTML='<header><button class="ic" onclick="list()">→</button><h1>الإعدادات</h1><span></span></header>'+
+ '<div class="card"><b>لغة الإملاء</b><select onchange="S.lang=this.value;save()">'+[['ar-EG','عربي مصري'],['ar-SA','عربي فصحى'],['en-US','English']].map(l=>'<option value="'+l[0]+'"'+(S.lang===l[0]?' selected':'')+'>'+l[1]+'</option>').join('')+'</select></div>'+
+ '<div class="card"><b>قفل بكود</b><input type="password" id="np" inputmode="numeric" placeholder="كود جديد (سيبه فاضي لإلغاء القفل)"><p><button class="sm" onclick="S.pin=document.getElementById(\'np\').value;save();alert(S.pin?\'تم تفعيل القفل\':\'تم إلغاء القفل\')">حفظ الكود</button></p></div>'+
+ '<div class="card"><b>نسخة احتياطية</b><textarea id="bk" rows="5" placeholder="الصق هنا نسخة قديمة عشان ترجعها"></textarea><p><button class="sm" onclick="exp()">تجهيز ونسخ</button> <button class="sm" onclick="imp()">استرجاع</button></p></div>';
+}
+function exp(){const b=document.getElementById('bk');b.value=JSON.stringify(S.notes);b.select();try{navigator.clipboard.writeText(b.value).then(()=>alert('تم النسخ. احفظه في مكان آمن'))}catch(e){}}
+function imp(){try{const a=JSON.parse(document.getElementById('bk').value);let c=0;a.forEach(n=>{if(n&&n.id&&Array.isArray(n.items)&&!S.notes.some(x=>x.id===n.id)){S.notes.push(n);c++}});save();alert('تم استرجاع '+c+' نوت')}catch(e){alert('النص مش نسخة صحيحة')}}
+
+applyTheme();
+S.pin?lock():list();
+</script>
+</body>
+</html>
